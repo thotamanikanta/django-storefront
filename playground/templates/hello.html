@@ -6,9 +6,9 @@
     <h1>Hello world!</h1>
     {% endif %}
     <ul>
-      {% for product in products %}
+      {% comment %} {% for product in products %}
       <li>{{ product.full_name }}</li>
-      {% endfor %}
+      {% endfor %} {% endcomment %}
     </ul>
     {% comment %}
     <ul>
