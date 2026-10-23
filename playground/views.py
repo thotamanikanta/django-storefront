@@ -157,6 +157,6 @@ def say_hello(request):
     # cursor.execute('select * from store_product')
     # cursor.close()
     with connection.cursor() as cursor:
-        cursor.execute()
-    print(list(query_set))
+        cursor.execute('select * from store_product')
+    # print(list(query_set))
     return render(request,'hello.html',{"name":"King Bob",'result':list(query_set)})
