@@ -1,6 +1,6 @@
 from django.shortcuts import get_object_or_404
+
 from rest_framework.response import Response
-from django.http import HttpResponse
 from rest_framework.decorators import api_view
 from rest_framework import status
 from rest_framework.views import APIView
@@ -8,8 +8,15 @@ from rest_framework.mixins import ListModelMixin,CreateModelMixin
 from rest_framework.generics import ListCreateAPIView,RetrieveUpdateDestroyAPIView
 from rest_framework.viewsets import ModelViewSet
 
-from store.models import Collection, Product
-from .serializers import CollectionSerializer, ProductSerializer
+
+from rest_framework.filters import SearchFilter,OrderingFilter
+from rest_framework.pagination import PageNumberPagination
+from django_filters.rest_framework import DjangoFilterBackend
+
+from store.filters import ProductFilter
+from store.models import Collection, OrderItem, Product,Review
+from store.pagination import DefaultPagination
+from .serializers import CollectionSerializer, ProductSerializer,ReviewSerializer
 from django.db.models.aggregates import Count
 # Create your views here.
 
@@ -23,12 +30,38 @@ class ProductList(ListCreateAPIView):
     #     return ProductSerializer
     def get_serializer_context(self):
         return {"request":self.request}
+    
 class ProductViewSet(ModelViewSet):
     serializer_class = ProductSerializer
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    ordering_fields = ['unit_price']
+    search_fields = ['title','description']
+    # filterset_fields = ['collection_id'] #without filter class
+    filterset_class =ProductFilter
     queryset = Product.objects.all()
+    pagination_class = DefaultPagination
+    """
+    Overwrite get_queryset method to filter manually with collection id.
+    If using DJnagoFIlterBackend that will automatically takes care of filter
+    """
+    # def get_queryset(self):
+    #     queryset = Product.objects.all()
+    #     print("))))))))))))))")
+    #     collection_id = self.request.query_params.get('collection_id')
+    #     print(collection_id,"????????????????????//")
+    #     if collection_id is not None:
+    #         queryset = queryset.filter(collection__id=collection_id)
+    #     return queryset
 
     def get_serializer_context(self):
         return {"request":self.request}
+
+    def destroy(self, request, *args, **kwargs):
+
+        if OrderItem.objects.filter(product_id=kwargs['pk']).count() >0: # orderitems is reverse relation related name from product to orderitems table(Default orderitem_set)
+            return Response({"error":"Product cannot be deleted as associsated Orderitem exists"},status=status.HTTP_403_FORBIDDEN)
+        
+        return super().destroy(request, *args, **kwargs)
     
     
 
@@ -54,7 +87,7 @@ class ProductDetail(RetrieveUpdateDestroyAPIView):
         if product.orderitems.count()>0: # orderitems is reverse relation related name from product to orderitems table(Default orderitem_set)
             return Response({"error":"Product cannot be deleted as associsated Orderitem exists"},status=status.HTTP_403_FORBIDDEN)
         product.delete()
-        return super().delete(request, *args, **kwargs)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 # class ProductDetail(APIView):
     
@@ -74,8 +107,16 @@ class ProductDetail(RetrieveUpdateDestroyAPIView):
 #             return Response({"error":"Product cannot be deleted as associsated Orderitem exists"},status=status.HTTP_403_FORBIDDEN)
 #         product.delete()
 #         return Response(status=status.HTTP_204_NO_CONTENT)
-    
 
+class CollectionViewSet(ModelViewSet):
+    queryset = Collection.objects.annotate(products_count=Count('products')).all() # products is related name from products table to collection . counts no of products for each collection
+    serializer_class = CollectionSerializer
+
+    def destroy(self, request, *args, **kwargs):
+        if Product.objects.filter(collection_id=kwargs['pk']).count() >0:
+            return Response({"error":"Collection cannot be deleted as associsated Product exists"},status=status.HTTP_403_FORBIDDEN)
+        return super().destroy(request, *args, **kwargs)
+    
 class CollectionList(ListCreateAPIView):
     queryset = Collection.objects.annotate(products_count=Count('products')).all() # products is related name from products table to collection . counts no of products for each collection
     serializer_class = CollectionSerializer
@@ -83,6 +124,9 @@ class CollectionList(ListCreateAPIView):
 class CollectionDetail(RetrieveUpdateDestroyAPIView):
     queryset = Collection.objects.annotate(products_count=Count('products')).all() # products is related name from products table to collection . counts no of products for each collection
     serializer_class = CollectionSerializer
+
+    def destroy(self, request, *args, **kwargs):
+        return super().destroy(request, *args, **kwargs)
     def delete(self, request, pk):
         collection = get_object_or_404(
         Collection.objects.annotate(products_count=Count('products')),
@@ -132,3 +176,17 @@ class CollectionDetail(RetrieveUpdateDestroyAPIView):
 #             return Response({"error":"Collection cannot be deleted as associsated Product exists"},status=status.HTTP_403_FORBIDDEN)
 #         collection.delete()
 #         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class ReviewViewSet(ModelViewSet):
+    serializer_class = ReviewSerializer
+    queryset = Review.objects.all()
+
+    def get_queryset(self):
+        return Review.objects.filter(product_id=self.kwargs['product_pk'])
+
+    def get_serializer_context(self):
+
+        return {'product_id': self.kwargs['product_pk']}
+
+ 
