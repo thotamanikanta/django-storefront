@@ -64,6 +64,8 @@ class CustomerAdmin(admin.ModelAdmin):
     list_display = ['first_name','last_name','membership']
     list_editable = ['membership']
     list_per_page = 10
+    list_select_related = ['user']
+    autocomplete_fields = ['user']
     search_fields = ['first_name__startswith','last_name__startswith']
 
 

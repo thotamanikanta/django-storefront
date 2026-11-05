@@ -2,6 +2,7 @@ from django.urls import path
 from rest_framework.routers import SimpleRouter,DefaultRouter
 # from .views import product_list,product_details,collection_details,collection_list
 from .views import (ProductList,ProductDetail,CollectionList,CollectionDetail,
+                    CustomerViewSet,
                     ProductViewSet,CollectionViewSet,ReviewViewSet,CartViewSet,CartItemViewSet)
 from rest_framework_nested import routers
 
@@ -10,12 +11,15 @@ router = routers.DefaultRouter()
 router.register('products',ProductViewSet,basename='products')
 router.register('collections',CollectionViewSet)
 router.register('cart',CartViewSet,basename='cart')
+router.register('customers',CustomerViewSet,basename='customers')
 
 products_router = routers.NestedDefaultRouter(router,'products',lookup='product')
 products_router.register('reviews',ReviewViewSet,basename='product-reviews')
 
 cart_router = routers.NestedDefaultRouter(router,'cart',lookup='cart')
 cart_router.register('items',CartItemViewSet ,basename='cart-items')
+
+
 
 
 

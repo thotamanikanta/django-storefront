@@ -1,12 +1,13 @@
 from django.shortcuts import get_object_or_404
 
 from rest_framework.response import Response
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view,action
 from rest_framework import status
 from rest_framework.views import APIView
-from rest_framework.mixins import ListModelMixin,CreateModelMixin,RetrieveModelMixin, DestroyModelMixin
+from rest_framework.mixins import ListModelMixin,CreateModelMixin,RetrieveModelMixin, DestroyModelMixin, UpdateModelMixin
 from rest_framework.generics import ListCreateAPIView,RetrieveUpdateDestroyAPIView
 from rest_framework.viewsets import ModelViewSet, GenericViewSet
+
 
 
 from rest_framework.filters import SearchFilter,OrderingFilter
@@ -14,9 +15,9 @@ from rest_framework.pagination import PageNumberPagination
 from django_filters.rest_framework import DjangoFilterBackend
 
 from store.filters import ProductFilter
-from store.models import Cart, CartItem, Collection, OrderItem, Product,Review
+from store.models import Cart, CartItem, Collection, Customer, OrderItem, Product,Review
 from store.pagination import DefaultPagination
-from .serializers import AddCartItemSerializer, CartItemSerializer, CartSerializer, CollectionSerializer, ProductSerializer,ReviewSerializer, UpdateCartItemSerializer
+from .serializers import AddCartItemSerializer, CartItemSerializer, CartSerializer, CollectionSerializer, CustomerSerializer, ProductSerializer,ReviewSerializer, UpdateCartItemSerializer
 from django.db.models.aggregates import Count
 # Create your views here.
 
@@ -194,7 +195,8 @@ from django.db.models import Prefetch
 
 class CartViewSet(CreateModelMixin,RetrieveModelMixin,DestroyModelMixin,GenericViewSet):
     queryset = Cart.objects.prefetch_related('items__product').all()
-    serializer_class = CartSerializer
+    # serializer_class = CartSerializer
+    
 
     # def get_queryset(self):
     #     return Cart.objects.prefetch_related(
@@ -217,5 +219,18 @@ class CartItemViewSet(ModelViewSet):
     def get_serializer_context(self):
         return {'cart_id':self.kwargs['cart_pk']}
 
-    def get_queryset(self):
+    def get(self):
         return CartItem.objects.filter(cart_id=self.kwargs['cart_pk']).select_related('product')
+
+class CustomerViewSet(CreateModelMixin,RetrieveModelMixin,UpdateModelMixin,GenericViewSet):
+    queryset = Customer.objects.all()
+    serializer_class = CustomerSerializer
+
+    @action(detail=False)
+    def me(self,request): # custom endpoint works customers/me
+        # user = request.user
+
+        customer = Customer.objects.get(user_id=request.user.id)
+        serializer = CustomerSerializer(customer)
+  
+        return Response(serializer.data)
