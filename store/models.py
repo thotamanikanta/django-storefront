@@ -59,12 +59,15 @@ class Customer(models.Model):
     membership= models.CharField(max_length=1, choices=MEMBERSHIP_CHOICES,default=MEMBERSHIP_BRONZE)
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
 
-    # class Meta:
-    #     # db_table = 'store_customers'
-    #     # indexes = [
-    #     #     models.Index(fields=['last_name','first_name'])
-    #     # ]
-    #     ordering = ['user__first_name','user__last_name']
+    class Meta:
+        # db_table = 'store_customers'
+        # indexes = [
+        #     models.Index(fields=['last_name','first_name'])
+        # ]
+        ordering = ['user__first_name','user__last_name']
+        permissions= [
+            ('view_history','Can view history')
+        ]
     
     def __str__(self) -> str:
         return f"{self.user.first_name} {self.user.last_name}"
@@ -97,7 +100,7 @@ class Order(models.Model):
             ('cancel_order','Can cancel order')]
 
 class OrderItem(models.Model):
-    order = models.ForeignKey(Order, on_delete=models.PROTECT)
+    order = models.ForeignKey(Order, on_delete=models.PROTECT,related_name='items')
     product = models.ForeignKey(Product, on_delete=models.PROTECT,related_name="orderitems")
     quantity = models.PositiveSmallIntegerField()
     unit_price = models.DecimalField(max_digits=6,decimal_places=2)

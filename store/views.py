@@ -15,10 +15,12 @@ from rest_framework.pagination import PageNumberPagination
 from django_filters.rest_framework import DjangoFilterBackend
 
 from store.filters import ProductFilter
-from store.models import Cart, CartItem, Collection, Customer, OrderItem, Product,Review
+from store.models import Cart, CartItem, Collection, Customer, Order, OrderItem, Product,Review
 from store.pagination import DefaultPagination
-from .serializers import AddCartItemSerializer, CartItemSerializer, CartSerializer, CollectionSerializer, CustomerSerializer, ProductSerializer,ReviewSerializer, UpdateCartItemSerializer
+from store.permissions import FullDjangoModelPermissions, IsAdminOrReadOnly, ViewCutsomerHistoryPermissions
+from .serializers import AddCartItemSerializer, CartItemSerializer, CartSerializer, CollectionSerializer, CreateOrderSerializer, CustomerSerializer, OrderSerializer, ProductSerializer,ReviewSerializer, UpdateCartItemSerializer, UpdateOrderSerializer
 from django.db.models.aggregates import Count
+from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser,DjangoModelPermissions
 # Create your views here.
 
 class ProductList(ListCreateAPIView):
@@ -41,6 +43,7 @@ class ProductViewSet(ModelViewSet):
     filterset_class =ProductFilter
     queryset = Product.objects.all()
     pagination_class = DefaultPagination
+    permission_classes = [IsAdminOrReadOnly]
     """
     Overwrite get_queryset method to filter manually with collection id.
     If using DJnagoFIlterBackend that will automatically takes care of filter
@@ -112,6 +115,7 @@ class ProductDetail(RetrieveUpdateDestroyAPIView):
 class CollectionViewSet(ModelViewSet):
     queryset = Collection.objects.annotate(products_count=Count('products')).all() # products is related name from products table to collection . counts no of products for each collection
     serializer_class = CollectionSerializer
+    permission_classes = [IsAdminOrReadOnly]
 
     def destroy(self, request, *args, **kwargs):
         if Product.objects.filter(collection_id=kwargs['pk']).count() >0:
@@ -195,7 +199,7 @@ from django.db.models import Prefetch
 
 class CartViewSet(CreateModelMixin,RetrieveModelMixin,DestroyModelMixin,GenericViewSet):
     queryset = Cart.objects.prefetch_related('items__product').all()
-    # serializer_class = CartSerializer
+    serializer_class = CartSerializer
     
 
     # def get_queryset(self):
@@ -219,18 +223,81 @@ class CartItemViewSet(ModelViewSet):
     def get_serializer_context(self):
         return {'cart_id':self.kwargs['cart_pk']}
 
-    def get(self):
+    def get_queryset(self):
         return CartItem.objects.filter(cart_id=self.kwargs['cart_pk']).select_related('product')
 
-class CustomerViewSet(CreateModelMixin,RetrieveModelMixin,UpdateModelMixin,GenericViewSet):
+class CustomerViewSet(ModelViewSet):
     queryset = Customer.objects.all()
     serializer_class = CustomerSerializer
+    # permission_classes = [FullDjangoModelPermissions]
+    permission_classes = [IsAdminUser]
 
-    @action(detail=False)
+    # def get_permissions(self):
+    #     if self.request.method == 'GET':
+    #         return [AllowAny()]
+    #     return super().get_permissions()
+    @action(detail=True,permission_classes=[ViewCutsomerHistoryPermissions])
+    def history(self,request,pk):
+        return Response('ok')
+
+
+    @action(detail=False, methods=['GET','PUT'],permission_classes=[IsAuthenticated])
     def me(self,request): # custom endpoint works customers/me
         # user = request.user
-
-        customer = Customer.objects.get(user_id=request.user.id)
-        serializer = CustomerSerializer(customer)
+        try:
+            customer = Customer.objects.get(user_id=request.user.id)
+            
+            
+        except Exception as e:
+            print(e,type(e))
+            return Response(str(e))
+        if request.method == 'GET':
+            
+            serializer = CustomerSerializer(customer)
+        elif request.method == 'PUT':
+            serializer = CustomerSerializer(customer, data=request.data)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            
   
         return Response(serializer.data)
+
+class OrderViewSet(ModelViewSet):
+    http_method_names = ['get','patch','post','head','options','delete']
+    # queryset = Order.objects.select_related(
+    #     'customer'
+    # ).prefetch_related(
+    #     Prefetch(
+    #         'items',
+    #         queryset=OrderItem.objects.select_related('product')
+    #     )
+    # )
+    # serializer_class = OrderSerializer
+    # permission_classes = [IsAuthenticated]
+    def get_permissions(self):
+        if self.request.method in ['PUT','POST','DELETE']:
+            return [IsAdminUser()]
+        
+        return [IsAuthenticated()]
+
+    def create(self, request, *args, **kwargs):
+        serializer = CreateOrderSerializer(data=request.data,context={'user_id':  self.request.user.id})
+        serializer.is_valid(raise_exception=True)
+        order = serializer.save()
+        serializer = OrderSerializer(order)
+        return Response(serializer.data)
+
+    def get_serializer_class(self):
+        if self.request.method == 'POST':
+            return CreateOrderSerializer
+        if self.request.method == 'PATCH':
+            return UpdateOrderSerializer
+        return OrderSerializer
+
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_staff:
+            return Order.objects.all()
+        customer_id = Customer.objects.only('id').get(user_id=user.id)
+        return Order.objects.filter(customer_id=customer_id)
